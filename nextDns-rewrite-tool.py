@@ -1,12 +1,13 @@
 import requests
 import subprocess
-import json
 import socket
-from sys import exit
 
 # Configurations for your nextDNS account
 nextDNSId = 'change_this'
-nCookies = {'sid': 'change_this' }
+nextDNSCreds = {
+    "email": "change_this",
+    "password": "change-this"
+}
 # Configurations for DNS rewrite options
 nextDNSDomain = 'change_this'
 nextDNSAnsIp = '{localIp}' #change this and modify createRewriteId() if you want to save a different ip
@@ -14,7 +15,7 @@ nextDNSAnsIp = '{localIp}' #change this and modify createRewriteId() if you want
 myWifiName = 'change_this' #The program executes only if you are connected to this particular network. If no such requirement is necessary, you may remove this and the associated checks in main()
 nUrlSet = "https://api.nextdns.io/configurations/{nextDNSId}/settings/rewrites"
 nUrlDel = "https://api.nextdns.io/configurations/{nextDNSId}/settings/rewrites/{rId}"
-nUrlCheck = "https://api.nextdns.io/configurations/{nextDNSId}/setup"
+nUrlLogin = "https://api.nextdns.io/accounts/@login"
 nHeaders = {'Origin': 'https://my.nextdns.io'}
 
 ## Returns local ip
@@ -31,29 +32,33 @@ def get_ip():
         s.close()
     return IP
 
-## Checks if nextdns session is valid, and if a nextdns rewrite is already created by this program
-def checkRewriteId():
-    r = requests.get(nUrlCheck.format(nextDNSId=nextDNSId), cookies=nCookies, headers=nHeaders)
-    if r.status_code == 403:
-        print("Error: received status code 403. Please check if cookies are valid")
-        exit(1)
-    rwId = filesHandle()
-    return rwId if rwId else False
 
-## If an old rewrite created through this program is found in 'nextDns_rewriteID.txt', delete it from NextDNS to create a new rewrite proper domain and ip,
-## Currently there is no update API for already created dns rewrites on NextDNS. When available, utilizing that would be a better procedure than the current check-delete-recreate cycle.
-def deleteRewriteId(rwId):
-    reqDel = requests.delete(nUrlDel.format(nextDNSId=nextDNSId,rId=rwId), cookies=nCookies, headers=nHeaders)
+def checkLogin():
+    reqLogin = session.post(nUrlLogin, json=nextDNSCreds, headers=nHeaders)
+    if 'errors' in reqLogin.text:
+        print("Error: " + reqLogin.text)
+        return False
     return True
 
 
-## Handles the creation, and re-creation of the dns rewrite on NextDNS
+## Checks if a nextdns rewrite is already created by this program, as tracked by 'nextDns_rewriteID.txt'
+def checkRewriteId():
+    rwId = filesHandle()
+    return rwId if rwId else False
+
+## If an old rewrite created through this program is found in 'nextDns_rewriteID.txt', delete it from NextDNS to create a new rewrite with proper domain and ip.
+## Currently there is no update API for already created dns rewrites on NextDNS. When available, utilizing that would be a better procedure than the current check-delete-recreate cycle
+def deleteRewriteId(rwId):
+    reqDel = session.delete(nUrlDel.format(nextDNSId=nextDNSId,rId=rwId), headers=nHeaders)
+    return True
+
+## Handles the creation of the dns rewrite on NextDNS
 def createRewriteId():
-    reqCreate = requests.post(nUrlSet.format(nextDNSId=nextDNSId), cookies=nCookies, json={"name": nextDNSDomain, "answer": nextDNSAnsIp.format(localIp=get_ip())}, headers=nHeaders) # change the answer key if you'd like a different ip rule
+    reqCreate = session.post(nUrlSet.format(nextDNSId=nextDNSId), json={"name": nextDNSDomain, "answer": nextDNSAnsIp.format(localIp=get_ip())}, headers=nHeaders)
     results = reqCreate.json()
-    print(results)
-    if 'errors' in results.keys():
-        print("Error: "+ str(results))
+    print(reqCreate.text)
+    if 'errors' in reqCreate.text:
+        print("Error: " + reqCreate.text)
         return False
     rwId = results["id"]
     filesHandle(rwId)
@@ -80,16 +85,15 @@ def main():
     wifiName = subprocess.check_output(['netsh', 'WLAN', 'show', 'interfaces'])
     wifiName = wifiName.decode('utf-8')
     if myWifiName in wifiName:
-        rwId = checkRewriteId()
-        if(rwId):
-            deleteRewriteId(rwId)
-        createRewriteId()
+        if(checkLogin()):
+            rwId = checkRewriteId()
+            if(rwId):
+                deleteRewriteId(rwId)
+            createRewriteId()
     else:
-        print("Error: not connected to specified network " + myWifiName)
-        exit(1)
-
-
+        print("Not connected to specified network " + myWifiName)
 
 
 if __name__ == "__main__":
+    session = requests.Session() # The persistent session used for all of the requests to NextDNS
     main()

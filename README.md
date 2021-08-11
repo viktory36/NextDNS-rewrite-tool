@@ -11,7 +11,7 @@ The solution is made feasible by the wonderful [NextDNS](https://nextdns.io/) se
 <br />
 
 ## Usage
-Before running, it is required to configure the program by modifying the sections marked as `'change_this'` in the code. Configurations include stuff like your NextDNS Endpoint ID, the authenticated NextDNS Session cookie `sid`, and your DNS Rewrite preferences.
+Before running, it is required to configure the program by modifying the sections marked as `'change_this'` in the code. Configurations include stuff like your NextDNS Endpoint ID, your NextDNS account credentials, and your DNS Rewrite preferences.
 
 <figure>
 <img src = '/images/example-NextDNS-ID.png' />
